@@ -23,21 +23,25 @@ Requires Ruby and Jekyll 4.4 or newer.
 ├── _layouts/default.html    two-pane shell, loads the scripts in order
 ├── _includes/toolbar.html   file button, table / chart / time buttons
 ├── ON9BD_illw_2022.ADI      a real N1MM contest export, useful as a fixture
+├── tools/
+│   └── build_dxcc_data.py   regenerates dxcc_data.js from cty.dat
 └── assets/
     ├── css/style.css        all styles
     └── js/
         ├── adif_enums.js    ADIF band list with frequency ranges, mode aliases
-        ├── dxcc_prefixes.js callsign prefix → country table
+        ├── dxcc_data.js     GENERATED prefix → DXCC entity table
+        ├── dxcc_prefixes.js the prefix lookup (longest-match, slash handling)
         ├── adif_parser.js   the parser and the per-record field accessors
         ├── charts.js        pie and bar rendering, cross-filtering, tooltip
         ├── timeline.js      QSOs per hour, one stacked chart per dimension
         └── app.js           toolbar wiring, loading, the table view
 ```
 
-The scripts must load in that order — `adif_parser.js` uses the two data
-modules, `charts.js` and `app.js` use the parser, and `timeline.js` uses both the
-parser and `charts.js` (for the dimension list and colours).
-`_layouts/default.html` is the only place that order is expressed.
+The scripts must load in that order — `dxcc_prefixes.js` reads the table out of
+`dxcc_data.js`, `adif_parser.js` uses both data modules, `charts.js` and
+`app.js` use the parser, and `timeline.js` uses both the parser and `charts.js`
+(for the dimension list and colours). `_layouts/default.html` is the only place
+that order is expressed.
 
 Each script is an IIFE hanging one global off `window`: `AdifEnums`,
 `DxccPrefixes`, `AdifParser`, `AdifCharts`, `AdifTimeline`. `app.js` exports
@@ -126,14 +130,25 @@ other software fills in. Each accessor falls back rather than giving up:
   Russia by call area, including the 9-area regions west of the Urals (Perm,
   Komi, Orenburg, Bashkortostan) that DXCC keeps in Europe. Checked against
   N1MM's own continent field on a real contest log: no disagreements.
-- **Country from the callsign prefix** is an approximation of the DXCC entity
-  list covering the common allocations, not all ~340 entities with their
-  exceptions. Lookup is longest-match, so `OH0` (Åland) beats `OH` (Finland).
-  `entity()` distinguishes a DX prefix from an operating suffix: `DL/ON4ABC` and
-  `ON4ABC/DL` both resolve to Germany, while `/MM`, `/LH` and bare call-area
-  suffixes like `/15` are ignored. The `OPERATING_SUFFIX` list exists precisely
-  because several of those collide with real prefixes — `/MM` looks like
-  Scotland, `/LH` like Norway. A real `COUNTRY` field always wins.
+- **Country from the callsign prefix** resolves against `dxcc_data.js`, which is
+  generated from cty.dat and covers all 326 current DXCC entities. Lookup is
+  longest-match, so `OH0` (Åland) beats `OH` (Finland), and `LONGEST` must stay
+  at or above the longest prefix the generator reports. `entity()` distinguishes
+  a DX prefix from an operating suffix: `DL/ON4ABC` and `ON4ABC/DL` both resolve
+  to Germany, while `/MM`, `/LH` and bare call-area suffixes like `/15` are
+  ignored. The `OPERATING_SUFFIX` list exists precisely because several of those
+  collide with real prefixes — `/MM` looks like Scotland, `/LH` like Norway. A
+  real `COUNTRY` field always wins.
+
+  Three things the prefix table deliberately cannot express, all documented in
+  the generator: WAE-only entities are dropped so their prefixes fall through to
+  the DXCC parent (`IT9` Sicily → Italy, `TA1` → Asiatic Turkey); sub-entities
+  identified by a call *suffix* rather than a prefix resolve to their parent
+  (`FO/A` Austral Is. → French Polynesia, `3D2/C` Conway Reef → Fiji); and
+  cty.dat's 22,910 exact-callsign overrides are dropped, so a station operating
+  away from home resolves by its prefix. The one visible casualty of the first
+  two is `4U1VIC` (UN Vienna), which lands on Italy because plain `4U` is
+  assigned to Italy.
 
 ---
 
@@ -174,11 +189,16 @@ other software fills in. Each accessor falls back rather than giving up:
 
 ## Extending it
 
-- **Correct or add a country prefix** — one `add("PREFIX", "Country", "EU")`
-  line in `assets/js/dxcc_prefixes.js`, the third argument being the ADIF
-  continent code. Longest-match means a more specific prefix beats a shorter one
-  automatically. If you add a prefix longer than four characters, raise
-  `LONGEST`.
+- **Refresh the country prefixes** — `python3 tools/build_dxcc_data.py`, which
+  fetches the current cty.dat and rewrites `assets/js/dxcc_data.js`. cty.dat is
+  MIT licensed, and MIT requires the notice to travel with any substantial
+  portion, so the generator writes the full licence text into the head of every
+  file it generates. Don't strip it, and keep it in the template if you change
+  the generator. Don't hand-
+  edit that file; it is generated, and the generator verifies every prefix
+  cty.dat defines still resolves correctly through the pruned table before
+  writing. Pass a path to use a local cty.dat instead of fetching. Worth re-running
+  when a DXCC entity is added or deleted, which is roughly a once-a-year event.
 - **Add a band or a mode alias** — the `BANDS` table (name plus frequency range)
   or `MODE_ALIASES` in `assets/js/adif_enums.js`.
 - **Add a chart dimension** — write an accessor in `adif_parser.js`, export it,

@@ -116,11 +116,14 @@ software fills in. Rather than give up, each dimension falls back:
 
 Three of these are worth reading with a pinch of salt:
 
-- **Country from a callsign prefix is an approximation** of the DXCC entity list.
-  It covers the common allocations and handles split entities (`OH0` Åland vs
-  `OH2` Finland, `EA8` Canary Islands vs `EA4` Spain, `GM` Scotland vs `G`
-  England), but not all ~340 entities with their exceptions. A real `COUNTRY`
-  field in your log always wins over it.
+- **Country from a callsign prefix** covers all 326 current DXCC entities,
+  including split ones (`OH0` Åland vs `OH2` Finland, `EA8` Canary Islands vs
+  `EA4` Spain, `GM` Scotland vs `G` England). The table comes from `cty.dat`,
+  the same mapping most logging software uses. Two things it cannot see: an
+  entity told apart by a *suffix* rather than a prefix (Austral Is. `FO/A`
+  inside French Polynesia, Conway Reef `3D2/C` inside Fiji) shows as its
+  parent, and so does an individual station operating away from home. A real
+  `COUNTRY` field in your log always wins over the prefix.
 - **Station type is inferred**, not read. ADIF has no field for how the worked
   station was operating, so this reads the callsign suffix — the convention
   operators actually use.
@@ -136,3 +139,11 @@ Three of these are worth reading with a pinch of salt:
   hairlines. Switch that card to **bar** for a long-tailed dimension such as
   country.
 - Light theme only; the page does not follow `prefers-color-scheme`.
+
+## Credits
+
+- [cty.dat](https://www.country-files.com/big-cty/) — the callsign prefix to DXCC
+  entity mapping behind the country and continent charts, by Jim Reisert, AD1C,
+  under the [MIT License](https://www.country-files.com/copyright/). The full
+  notice is reproduced in [assets/js/dxcc_data.js](assets/js/dxcc_data.js).
+- [ADIF](https://adif.org/) — the log format itself, by the ADIF Development Group.
