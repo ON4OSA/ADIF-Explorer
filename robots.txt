@@ -1,0 +1,8 @@
+---
+# Front matter makes Jekyll process this file; layout: none stops the site-wide
+# default layout from wrapping the directives in HTML.
+layout: none
+---
+User-agent: *
+Allow: /
+Disallow:

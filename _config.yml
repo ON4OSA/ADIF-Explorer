@@ -1,0 +1,33 @@
+# --- Site ---------------------------------------------------------------
+title: ADIF Explorer
+description: >-
+  Interactive web application for visualizing ADIF log files in the browser.
+lang: en_US
+locale: en_US
+timezone: Etc/UTC
+
+url: ""
+baseurl: ""
+
+# --- Build --------------------------------------------------------------
+# Single-page site: no blog, no posts, no pagination.
+theme:
+plugins: []
+
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - vendor
+  - README.md
+  - CLAUDE.md
+  - .git
+  - .gitignore
+
+sass:
+  style: compressed
+
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default

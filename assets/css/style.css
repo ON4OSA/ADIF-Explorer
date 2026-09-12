@@ -1,0 +1,971 @@
+/* ---------------------------------------------------------------------------
+   ADIF Explorer — base shell
+   Two panes: a fixed-height toolbar and a working pane that fills the rest.
+   --------------------------------------------------------------------------- */
+
+:root {
+  --page-bg: #f2f3f5;          /* very light gray */
+  --pane-bg: #ffffff;
+  --pane-border: #e3e5e8;
+  --text: #1f2328;
+  --text-muted: #656d76;
+
+  --control-bg: #f6f7f8;
+  --control-bg-hover: #eef0f2;
+  --control-bg-active: #e6e9ec;
+  --control-border: #d5d8dc;
+  --control-border-hover: #c2c6cc;
+  --accent: #2f6feb;
+  --accent-soft: #e4edfd;
+  --danger: #b3261e;
+  --row-hover: #f6f8fa;
+  --series-1: #2a78d6;
+  --bar-track: #eef0f2;
+
+  --file-select-width: 240px;
+
+  --toolbar-height: 56px;
+  --shell-gap: 12px;
+  --shell-padding: 12px;
+  --radius: 10px;
+  --shadow: 0 1px 2px rgba(27, 31, 36, 0.06);
+
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--page-bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Shell ------------------------------------------------------------------- */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  gap: var(--shell-gap);
+  height: 100vh;
+  height: 100dvh;
+  padding: var(--shell-padding);
+}
+
+.pane {
+  background: var(--pane-bg);
+  border: 1px solid var(--pane-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+/* Pane 1: toolbar — fixed height, full width ------------------------------ */
+
+.pane--toolbar {
+  flex: 0 0 var(--toolbar-height);
+  height: var(--toolbar-height);
+  /* Three tracks: the outer 1fr columns are equal, so the center track stays
+     centered in the pane no matter what sits left or right of it. */
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+}
+
+.toolbar__section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.toolbar__section--center {
+  justify-content: center;
+}
+
+.toolbar__section--right {
+  justify-content: flex-end;
+}
+
+.toolbar__brand {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+/* File selector ----------------------------------------------------------- */
+
+.file-select {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* Hidden but still focusable and screen-reader reachable; the label is the
+   visible control and drives it via `for`. */
+.file-select__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.file-select__button {
+  /* Fixed size: the control never resizes as the filename changes. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: var(--file-select-width);
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--control-border);
+  border-radius: 6px;
+  background: var(--control-bg);
+  color: var(--text);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  overflow: hidden;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.file-select__button:hover {
+  background: var(--control-bg-hover);
+  border-color: var(--control-border-hover);
+}
+
+.file-select__button:active {
+  background: var(--control-bg-active);
+}
+
+.file-select__input:focus-visible + .file-select__button {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.file-select__icon {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+
+/* min-width:0 lets the flex item shrink so the ellipsis can apply. */
+.file-select__label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.file-select--set .file-select__icon {
+  color: var(--accent);
+}
+
+/* Pane 2: working pane — fills the remaining space ------------------------ */
+
+.pane--work {
+  flex: 1 1 auto;
+  min-height: 0;      /* lets the pane shrink instead of overflowing */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;   /* children scroll, not the pane itself */
+  padding: 16px;
+}
+
+/* Toolbar icon button ----------------------------------------------------- */
+
+.toolbar__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--control-border);
+  border-radius: 6px;
+  background: var(--control-bg);
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, opacity 0.12s ease;
+}
+
+.toolbar__button:hover:not(:disabled) {
+  background: var(--control-bg-hover);
+  border-color: var(--control-border-hover);
+}
+
+.toolbar__button:active:not(:disabled) {
+  background: var(--control-bg-active);
+}
+
+.toolbar__button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.toolbar__button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Placeholder / empty state ----------------------------------------------- */
+
+.placeholder {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+}
+
+.placeholder__text {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.placeholder__text--error {
+  color: var(--danger);
+}
+
+/* Table view -------------------------------------------------------------- */
+
+.table-view {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.table-view__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.table-view__meta strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.table-view__warn {
+  color: var(--danger);
+}
+
+/* The scroll box, not the pane, so the sticky header pins to its top edge. */
+.table-view__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--pane-border);
+  border-radius: 8px;
+}
+
+.adif-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.adif-table th,
+.adif-table td {
+  padding: 6px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--pane-border);
+}
+
+.adif-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--control-bg);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+}
+
+.adif-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.adif-table tbody tr:hover td {
+  background: var(--row-hover);
+}
+
+.adif-table__index {
+  color: var(--text-muted);
+  text-align: right;
+  width: 1%;
+}
+
+/* Chart view -------------------------------------------------------------- */
+
+.chart-view {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chart-view__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.chart-view__meta strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* One flex box per chart: each card takes a fair share of the row and wraps
+   to the next line rather than shrinking below a readable width. */
+.chart-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  align-content: flex-start;
+  gap: 16px;
+}
+
+.chart-card {
+  flex: 1 1 260px;
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  border: 1px solid var(--pane-border);
+  border-radius: 8px;
+  background: var(--pane-bg);
+}
+
+/* Head: titles on the left, the chart-type selector pinned to the right. */
+.chart-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.chart-card__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.chart-card__sub {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.chart-card__empty {
+  margin: 24px 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* Chart-type selector ----------------------------------------------------- */
+
+.chart-toggle {
+  flex: 0 0 auto;
+  display: flex;
+  border: 1px solid var(--control-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.chart-toggle__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: var(--control-bg);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.chart-toggle__btn + .chart-toggle__btn {
+  border-left: 1px solid var(--control-border);
+}
+
+.chart-toggle__btn:hover {
+  background: var(--control-bg-hover);
+  color: var(--text);
+}
+
+.chart-toggle__btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* The selected type needs to read at a glance, so it takes a tinted ground
+   rather than the near-white the unselected button already sits on. */
+.chart-toggle__btn[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.chart-toggle__btn[aria-pressed="true"]:hover {
+  background: var(--accent-soft);
+}
+
+/* Pie --------------------------------------------------------------------- */
+
+.chart-card__body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.pie__svg {
+  width: 100%;
+  max-width: 184px;
+  height: auto;
+}
+
+.pie__slice {
+  cursor: pointer;
+  transition: opacity 0.12s ease;
+}
+
+/* Dim the rest of the pie while one slice is hovered - but never brighten a
+   slice the filter has dimmed. */
+.chart-card:has(.pie__slice.is-active) .pie__slice:not(.is-active):not(.is-dimmed) {
+  opacity: 0.4;
+}
+
+/* Labels sit on the fills, so they wear white rather than a text token. */
+.pie__label {
+  fill: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.pie__legend {
+  width: 100%;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.pie__legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 4px;
+  padding: 1px 4px;
+  margin: 0 -4px;
+  cursor: default;
+}
+
+.pie__legend-item.is-active {
+  background: var(--row-hover);
+}
+
+.pie__swatch {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.pie__legend-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pie__legend-value {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 8px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.pie__legend-count,
+.bar-chart__count {
+  display: inline-block;
+  /* Sized from the largest count in this chart, so the value blocks - and
+     therefore the bar tracks beside them - line up across every row. */
+  min-width: var(--count-width, 3ch);
+  text-align: right;
+}
+
+.pie__legend-pct {
+  display: inline-block;
+  width: 44px;
+  text-align: right;
+}
+
+/* Bar --------------------------------------------------------------------- */
+
+/* Ranked bars carry identity in the row label, so they need no legend and no
+   per-category colour: one hue, and length does the comparing. */
+.bar-chart {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+}
+
+.bar-chart__row {
+  display: grid;
+  grid-template-columns: minmax(64px, 30%) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 4px;
+  margin: 0 -4px;
+  border-radius: 4px;
+  cursor: default;
+}
+
+.bar-chart__row.is-active {
+  background: var(--row-hover);
+}
+
+.bar-chart__label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.bar-chart__track {
+  height: 10px;
+  background: var(--bar-track);
+  border-radius: 2px;
+}
+
+.bar-chart__fill {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  background: var(--series-1);
+  /* Rounded data-end, square against the baseline it grows from. */
+  border-radius: 2px 4px 4px 2px;
+}
+
+.bar-chart__value {
+  display: flex;
+  gap: 8px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.bar-chart__pct {
+  display: inline-block;
+  width: 44px;
+  text-align: right;
+}
+
+/* Long-tail dimensions ---------------------------------------------------- */
+
+/* A dimension with a long tail takes a row of its own: as a pie its legend
+   runs in columns beside the chart, as bars it uses the full width. Otherwise
+   one tall card drags its whole flex row down and pushes neighbours off. */
+.chart-card--wide {
+  flex: 1 1 100%;
+}
+
+.chart-card--wide .chart-card__body--pie {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 24px;
+  align-items: start;
+}
+
+.chart-card--wide .chart-card__body--pie .pie__svg {
+  width: 184px;
+}
+
+.chart-card--wide .chart-card__body--pie .pie__legend {
+  display: block;
+  margin-top: 0;
+  column-width: 190px;
+  column-gap: 24px;
+}
+
+.chart-card--wide .chart-card__body--pie .pie__legend-item {
+  break-inside: avoid;
+  margin-bottom: 4px;
+}
+
+/* A full-width row would stretch the track to a metre of screen for a value
+   of 44, which exaggerates the gaps. Cap it and let a trailing empty track
+   absorb the slack. */
+.chart-card--wide .bar-chart__row {
+  grid-template-columns: minmax(64px, 200px) minmax(0, 560px) auto minmax(0, 1fr);
+}
+
+/* Timeline ---------------------------------------------------------------- */
+
+.timeline {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+}
+
+.timeline__note {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* One full-width card per series, stacked down the page. Same treatment as
+   a chart card, but it must not grow to fill the column - flex-basis in a
+   column container is height. */
+.timeline-card {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--pane-border);
+  border-radius: 8px;
+  background: var(--pane-bg);
+}
+
+.timeline-card .chart-card__head {
+  margin-bottom: 0;
+}
+
+.timeline__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+
+.timeline__legend-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.timeline__legend-count {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The axis is a sibling of the scroller, not inside it, so the value labels
+   stay put when a long session scrolls sideways. */
+.timeline__chart {
+  display: flex;
+  align-items: flex-start;
+}
+
+.timeline__axis {
+  flex: 0 0 auto;
+}
+
+.timeline__scroll {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.timeline__plot {
+  display: block;
+}
+
+.timeline__tick {
+  fill: var(--text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.timeline__grid {
+  stroke: var(--pane-border);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.timeline__daybreak {
+  stroke: var(--control-border);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.timeline__hour {
+  fill: var(--text-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.timeline__day {
+  fill: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.timeline__seg {
+  pointer-events: none;    /* the full-height hit area takes the hover */
+}
+
+.timeline__hit {
+  fill: transparent;
+}
+
+.timeline__hit:hover,
+.timeline__hit.is-active {
+  fill: var(--row-hover);
+}
+
+/* Filter bar -------------------------------------------------------------- */
+
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.filter-bar__label {
+  color: var(--text-muted);
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.filter-chip:hover {
+  background: #d6e4fc;
+}
+
+.filter-chip:focus-visible,
+.filter-bar__clear:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.filter-chip__dim {
+  opacity: 0.75;
+}
+
+.filter-chip__value {
+  font-weight: 600;
+}
+
+.filter-bar__clear {
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.filter-bar__clear:hover {
+  color: var(--text);
+}
+
+/* Selected and unselected marks -------------------------------------------- */
+
+/* Marks are clickable: clicking one filters every other chart by it. */
+.pie__slice,
+.pie__legend-item,
+.bar-chart__row {
+  cursor: pointer;
+}
+
+/* In the chart that owns the selection, the unpicked values stay on screen -
+   they are how you switch selection - but recede. */
+.pie__slice.is-dimmed {
+  opacity: 0.22;
+}
+
+.pie__legend-item.is-dimmed,
+.bar-chart__row.is-dimmed {
+  opacity: 0.42;
+}
+
+.pie__legend-item.is-selected,
+.bar-chart__row.is-selected {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.chart-card--filtered .chart-card__title::after {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: middle;
+}
+
+/* Chart tooltip ----------------------------------------------------------- */
+
+/* A class rule with `display` beats the UA's [hidden] rule, so restate it. */
+.chart-tip[hidden] {
+  display: none;
+}
+
+.chart-tip {
+  position: fixed;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 280px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: #1f2328;
+  color: #ffffff;
+  font-size: 12px;
+  line-height: 1.4;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(27, 31, 36, 0.24);
+}
+
+.chart-tip__swatch {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+}
+
+.chart-tip__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+
+.chart-tip__value {
+  flex: 0 0 auto;
+  color: #c9ccd1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Stacked variant: a heading plus one row per mode. */
+.chart-tip--stack {
+  display: block;
+  min-width: 150px;
+}
+
+.chart-tip__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 5px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid #3a3f45;
+  font-weight: 600;
+}
+
+.chart-tip__total {
+  color: #c9ccd1;
+  font-weight: 400;
+}
+
+.chart-tip__row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  line-height: 1.6;
+}
+
+.chart-tip__row--quiet {
+  color: #c9ccd1;
+}
+
+.chart-tip__row .chart-tip__name {
+  flex: 1 1 auto;
+}
+
+.chart-tip__row .chart-tip__value {
+  color: #ffffff;
+}
+
+/* Narrow screens ---------------------------------------------------------- */
+
+@media (max-width: 560px) {
+  :root {
+    --file-select-width: 170px;
+  }
+
+  .toolbar__brand {
+    display: none;
+  }
+}

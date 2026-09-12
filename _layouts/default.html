@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="{{ site.lang | default: 'en_US' | replace: '_', '-' }}">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% if page.title and page.title != site.title %}{{ page.title }} &middot; {% endif %}{{ site.title }}</title>
+    <meta name="description" content="{{ page.description | default: site.description | strip_newlines }}">
+    <link rel="stylesheet" href="{{ '/assets/css/style.css' | relative_url }}">
+  </head>
+  <body>
+    <div class="app">
+      <header class="pane pane--toolbar" role="banner">
+        {% include toolbar.html %}
+      </header>
+
+      <main class="pane pane--work" id="work-pane" role="main">
+        {{ content }}
+      </main>
+    </div>
+
+    <script src="{{ '/assets/js/adif_enums.js' | relative_url }}"></script>
+    <script src="{{ '/assets/js/dxcc_prefixes.js' | relative_url }}"></script>
+    <script src="{{ '/assets/js/adif_parser.js' | relative_url }}"></script>
+    <script src="{{ '/assets/js/charts.js' | relative_url }}"></script>
+    <script src="{{ '/assets/js/timeline.js' | relative_url }}"></script>
+    <script src="{{ '/assets/js/app.js' | relative_url }}"></script>
+  </body>
+</html>
