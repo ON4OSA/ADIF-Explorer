@@ -20,7 +20,26 @@
   "use strict";
 
   var TABLE = Object.create(null);
+  var NAMES = Object.create(null);
   var LONGEST = 1;
+
+  /* A country name reduced to the part that carries meaning, so that the same
+     entity written two ways lands on one key: case, accents, punctuation and
+     "&" vs "and" all stop mattering. Deliberately conservative — it never
+     drops a word, because words are what tell entities apart ("Congo" and
+     "Dem. Rep. of the Congo" are two countries, as are the two Koreas). */
+  function normaliseName(value) {
+    var text = String(value == null ? "" : value);
+
+    if (text.normalize) {
+      text = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    }
+
+    return text.toUpperCase()
+               .replace(/&/g, " AND ")
+               .replace(/[^A-Z0-9]+/g, " ")
+               .trim();
+  }
 
   /* dxcc_data.js carries one string per entity: NAME|CONTINENT|PFX PFX PFX */
   (function build() {
@@ -31,12 +50,22 @@
       var entity = { country: parts[0], continent: parts[1] };
       var prefixes = parts[2].split(" ");
 
+      NAMES[normaliseName(entity.country)] = entity;
+
       for (var p = 0; p < prefixes.length; p++) {
         TABLE[prefixes[p]] = entity;
         if (prefixes[p].length > LONGEST) LONGEST = prefixes[p].length;
       }
     }
   })();
+
+  /* The entity a free-text country name refers to, or null when the text is
+     not a name this list knows. "CANADA", "Canada" and "canada" all resolve to
+     the one entity, so a log that shouts its COUNTRY field and a name derived
+     from a callsign stop being two different countries. */
+  function byName(value) {
+    return NAMES[normaliseName(value)] || null;
+  }
 
   /* Suffixes that describe how or where someone is operating rather than the
      country they are in. Several collide with real prefixes, so they are
@@ -95,5 +124,10 @@
     return hit ? hit.country : "";
   }
 
-  global.DxccPrefixes = { lookup: lookup, entity: entity, table: TABLE };
+  global.DxccPrefixes = {
+    lookup: lookup,
+    entity: entity,
+    byName: byName,
+    table: TABLE
+  };
 })(window);

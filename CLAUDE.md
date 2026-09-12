@@ -109,7 +109,7 @@ other software fills in. Each accessor falls back rather than giving up:
 
 | Dimension | Source, in order |
 |---|---|
-| **Country** | `COUNTRY` → callsign prefix → `DXCC` entity number |
+| **Country** | `COUNTRY` resolved to an entity → callsign prefix → `DXCC` entity number |
 | **Continent** | `CONT` → `APP_N1MM_CONTINENT` → continent of the callsign prefix |
 | **Band** | `BAND`, normalised (`20M`, `20 m`, `20meters` → `20m`) → derived from `FREQ` |
 | **Mode** | `SUBMODE` if present, else `MODE`; `USB`/`LSB` fold into `SSB` |
@@ -130,6 +130,16 @@ other software fills in. Each accessor falls back rather than giving up:
   Russia by call area, including the 9-area regions west of the Urals (Perm,
   Komi, Orenburg, Bashkortostan) that DXCC keeps in Europe. Checked against
   N1MM's own continent field on a real contest log: no disagreements.
+- **The `COUNTRY` field is resolved, not trusted as a label.** It is free text
+  and logging programs disagree about how to write it, so `DxccPrefixes.byName`
+  matches it to an entity ignoring case, accents, punctuation and `&` vs `and`.
+  Unrecognised wording falls through to the callsign prefix, which is what
+  silently fixes spellings the list has never heard of — there is no fuzzy
+  matching anywhere, and there deliberately is none: `normaliseName` never drops
+  a word, because words are what separate `Congo` from `Dem. Rep. of the Congo`
+  and the two Koreas from each other. A recognised `COUNTRY` still beats the
+  prefix, since it can name a suffix-identified entity the prefix table cannot
+  reach. `continent()` follows the same order so the two never disagree.
 - **Country from the callsign prefix** resolves against `dxcc_data.js`, which is
   generated from cty.dat and covers all 326 current DXCC entities. Lookup is
   longest-match, so `OH0` (Åland) beats `OH` (Finland), and `LONGEST` must stay

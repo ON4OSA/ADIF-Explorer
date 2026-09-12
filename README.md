@@ -107,7 +107,7 @@ software fills in. Rather than give up, each dimension falls back:
 
 | Dimension | Source, in order |
 |---|---|
-| **Country** | `COUNTRY` → callsign prefix → `DXCC` entity number |
+| **Country** | `COUNTRY` if it names a known entity → callsign prefix → `DXCC` entity number |
 | **Continent** | `CONT` → `APP_N1MM_CONTINENT` → continent of the callsign prefix |
 | **Band** | `BAND`, normalised (`20M`, `20 m`, `20meters` → `20m`) → derived from `FREQ` |
 | **Mode** | `SUBMODE` if present, else `MODE`; `USB`/`LSB` fold into `SSB` |
@@ -122,8 +122,14 @@ Three of these are worth reading with a pinch of salt:
   the same mapping most logging software uses. Two things it cannot see: an
   entity told apart by a *suffix* rather than a prefix (Austral Is. `FO/A`
   inside French Polynesia, Conway Reef `3D2/C` inside Fiji) shows as its
-  parent, and so does an individual station operating away from home. A real
-  `COUNTRY` field in your log always wins over the prefix.
+  parent, and so does an individual station operating away from home.
+
+  Your log's own `COUNTRY` field wins where it names an entity on that list,
+  whatever case or punctuation it is written in — `CANADA`, `Canada` and
+  `canada` are one country, not three. A wording the list does not recognise
+  (`The Kingdom of Belgium`) falls through to the callsign instead of becoming
+  a slice of its own, so a log that fills the field in for some QSOs and not
+  others still charts as one country per country.
 - **Station type is inferred**, not read. ADIF has no field for how the worked
   station was operating, so this reads the callsign suffix — the convention
   operators actually use.

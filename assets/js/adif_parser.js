@@ -198,15 +198,36 @@
   }
 
   /* COUNTRY is optional and contest exports often omit it, so fall back
-     through DXCC and finally the callsign prefix (see dxcc_prefixes.js). */
+     through the callsign prefix and finally DXCC (see dxcc_prefixes.js).
+
+     The COUNTRY field is free text, and logging programs disagree about how to
+     write it — "CANADA", "Canada", "The Kingdom of Belgium". Taken verbatim,
+     each spelling becomes its own slice on a chart, and a log that fills the
+     field in for some QSOs but not others splits one country in two. So the
+     field is resolved to a DXCC entity rather than trusted as a label:
+
+       1. the text names an entity we know  -> that entity's canonical name,
+          whatever case or punctuation the log wrote it in;
+       2. otherwise the callsign prefix     -> also a canonical name, which is
+          what quietly fixes wordings the list does not recognise;
+       3. otherwise the text as written, because an unrecognised name is still
+          better than nothing.
+
+     A recognised COUNTRY field wins over the prefix because it can be more
+     specific: the prefix table cannot express an entity told apart by a call
+     suffix, so a log that says "Austral Islands" knows something FO cannot. */
   function country(record) {
     var value = (record.country || "").trim();
-    if (value) return value;
 
     if (global.DxccPrefixes) {
+      var named = global.DxccPrefixes.byName(value);
+      if (named) return named.country;
+
       var byPrefix = global.DxccPrefixes.lookup(record.call);
       if (byPrefix) return byPrefix;
     }
+
+    if (value) return value;
 
     var dxcc = (record.dxcc || "").trim();
     if (dxcc) return "DXCC " + dxcc;
@@ -226,7 +247,9 @@
     var code = (record.cont || record.app_n1mm_continent || "").trim().toUpperCase();
 
     if (!code && global.DxccPrefixes) {
-      var hit = global.DxccPrefixes.entity(record.call);
+      // Same order country() uses, so the two never disagree about a record.
+      var named = global.DxccPrefixes.byName(record.country);
+      var hit = named || global.DxccPrefixes.entity(record.call);
       if (hit) code = hit.continent;
     }
 
