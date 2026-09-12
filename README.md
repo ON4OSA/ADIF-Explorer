@@ -27,7 +27,7 @@ You can also point the page at a hosted log with `?adif=`:
 
 ```
 http://127.0.0.1:4000/?adif=https://example.com/logs/station.adi
-http://127.0.0.1:4000/?adif=/logs/2026/field-day.adi        (same site)
+http://127.0.0.1:4000/?adif=logs/2026/field-day.adi         (same site)
 ```
 
 | Parameter | Purpose |

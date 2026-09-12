@@ -146,6 +146,13 @@ other software fills in. Each accessor falls back rather than giving up:
   skips that dimension's filter so the card keeps showing all of its values,
   the selected one lit and the rest dimmed, and you can switch selection without
   first clearing it.
+- **Asset paths in `_layouts/default.html` are relative** (`assets/js/app.js`),
+  not root-absolute and not run through `relative_url`. The site deploys to a
+  GitHub Pages project subpath — <https://on4osa.be/ADIF-Explorer/> — where a
+  leading slash would point at the domain root and 404. Relative paths work
+  there and at `127.0.0.1:4000` with no `baseurl` to keep in sync. This holds
+  only while `index.html` is the site's one page, at the root; a page in a
+  subdirectory would need its own `../` prefix or a `<base>` tag.
 - **`AdifCharts.dimensions` is the single dimension list.** The time view reads
   it, so adding a chart there adds a timeline chart too.
 - **Every QSO has exactly one value in every dimension.** That is what lets the
