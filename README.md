@@ -147,3 +147,10 @@ Three of these are worth reading with a pinch of salt:
   under the [MIT License](https://www.country-files.com/copyright/). The full
   notice is reproduced in [assets/js/dxcc_data.js](assets/js/dxcc_data.js).
 - [ADIF](https://adif.org/) — the log format itself, by the ADIF Development Group.
+
+## License
+
+Written by Robin Janssens (ON4IO) for the [ON4OSA](https://on4osa.be/) radio
+club, and released under the [MIT License](LICENSE) — use it, change it, host
+your own copy. The bundled DXCC prefix data is MIT licensed as well, with its
+notice reproduced in the file that carries it; see Credits above.

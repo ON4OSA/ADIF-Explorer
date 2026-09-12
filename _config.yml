@@ -20,6 +20,7 @@ exclude:
   - vendor
   - README.md
   - CLAUDE.md
+  - LICENSE
   - tools
   - .git
   - .gitignore
