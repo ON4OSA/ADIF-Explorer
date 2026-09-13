@@ -695,10 +695,35 @@ body {
   font-size: 12px;
 }
 
+/* Legend rows are the time view's filter control, so they carry the same
+   affordances as the chart view's legend: clickable, focusable, and marked
+   when they own the selection. */
 .timeline__legend-item {
   display: flex;
   align-items: center;
   gap: 7px;
+  padding: 2px 6px;
+  margin: -2px -6px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.timeline__legend-item:hover {
+  background: var(--row-hover);
+}
+
+.timeline__legend-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.timeline__legend-item.is-dimmed {
+  opacity: 0.42;
+}
+
+.timeline__legend-item.is-selected {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 
 .timeline__legend-count {

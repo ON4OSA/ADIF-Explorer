@@ -100,6 +100,26 @@ in every chart, and their horizontal scrolling is synchronised.
 
 Hovering a column gives the hour, its total, and that chart's breakdown of it.
 
+The legends cross-filter, the same way the chart view's do. Click a value and
+every chart redraws from the QSOs that match; selections in different dimensions
+combine, clicking the same value again clears it, and the active ones appear as
+removable chips with a **Clear all**. Legend rows respond to Enter and Space.
+
+Two things behave differently here than on the chart view, both so the charts
+stay comparable:
+
+- **Every chart's bars show the filtered set**, its own dimension included. That
+  is what keeps the bars identical across all six, which is the whole point of
+  stacking them down one page.
+- **A legend still lists what you could switch to**, counted as if its own
+  filter were not set — so picking `SSB` does not hide `CW`, and the count on
+  the row you picked matches the bars beside it.
+
+**The time axis stays pinned to the whole log** when you filter, so a selection
+is seen against the session it happened in rather than closing up around itself.
+The vertical scale does rescale, or a rare mode would be a row of invisible
+slivers; the heading reports the peak so you can still read absolute numbers.
+
 ## Where the numbers come from
 
 ADIF records are sparse, and contest exports in particular omit fields that other

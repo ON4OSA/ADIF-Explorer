@@ -420,6 +420,7 @@
     html.push("</div></div>");
     session.pane.innerHTML = html.join("");
 
+    attachInteraction(session.pane.querySelector(".chart-view"));
     attachTooltip(session.pane.querySelector(".chart-grid"));
   }
 
@@ -445,15 +446,19 @@
     return data.slices[index] ? { key: key, slice: data.slices[index] } : null;
   }
 
-  var bound = new WeakSet();
+  /* Bound to the view's own root, which draw() rebuilds every time, NOT to the
+     work pane. The pane outlives the view and is shared with the time view,
+     which emits the same data-clear / data-clear-all attributes on its filter
+     bar: a listener left on the pane would keep firing while the other view is
+     on screen, clear the wrong filter set and repaint over it. Listeners on the
+     root die with the element, so there is exactly one live handler at a time
+     and no cross-talk is possible. */
+  function attachInteraction(root) {
+    if (!root) return;
 
-  function attachInteraction(pane) {
-    if (bound.has(pane)) return;
-    bound.add(pane);
-
-    pane.addEventListener("click", function (event) {
+    root.addEventListener("click", function (event) {
       var chip = event.target.closest("[data-clear], [data-clear-all]");
-      if (chip && pane.contains(chip)) {
+      if (chip && root.contains(chip)) {
         if (chip.hasAttribute("data-clear-all")) {
           session.filters = Object.create(null);
         } else {
@@ -464,7 +469,7 @@
       }
 
       var typeButton = event.target.closest("[data-chart-type]");
-      if (typeButton && pane.contains(typeButton)) {
+      if (typeButton && root.contains(typeButton)) {
         var forKey = typeButton.getAttribute("data-for");
         var type = typeButton.getAttribute("data-chart-type");
         if (session.types[forKey] !== type) {
@@ -475,7 +480,7 @@
       }
 
       var mark = event.target.closest("[data-slice]");
-      if (!mark || !pane.contains(mark)) return;
+      if (!mark || !root.contains(mark)) return;
 
       var hit = sliceAt(mark);
       if (hit) toggleFilter(hit.key, hit.slice.name);
@@ -484,11 +489,11 @@
     // Legend rows and bar rows are exposed as buttons, so they answer the
     // keyboard too. Pie slices stay mouse-only; the legend beside them is the
     // keyboard route to the same values.
-    pane.addEventListener("keydown", function (event) {
+    root.addEventListener("keydown", function (event) {
       if (event.key !== "Enter" && event.key !== " ") return;
 
       var mark = event.target.closest('[data-slice][role="button"]');
-      if (!mark || !pane.contains(mark)) return;
+      if (!mark || !root.contains(mark)) return;
 
       event.preventDefault();
       var hit = sliceAt(mark);
@@ -619,7 +624,6 @@
     };
 
     draw();
-    attachInteraction(pane);
   }
 
   global.AdifCharts = {

@@ -178,6 +178,31 @@ other software fills in. Each accessor falls back rather than giving up:
   there and at `127.0.0.1:4000` with no `baseurl` to keep in sync. This holds
   only while `index.html` is the site's one page, at the root; a page in a
   subdirectory would need its own `../` prefix or a `<base>` tag.
+- **Event listeners bind to the view's own root, never to the work pane.**
+  `#work-pane` outlives every view and is shared by all three of them, and both
+  chart and time view emit the same `data-clear` / `data-clear-all` on their
+  filter bars. A delegated listener left on the pane keeps firing while the
+  *other* view is on screen: clicking a chip in the time view then cleared the
+  chart view's filter and repainted the chart view over the timeline. So
+  `attachInteraction` is called from `draw()` with the freshly built
+  `.chart-view` / `.timeline` element, and the listeners die with it — one live
+  handler at a time, no cross-talk possible, and no accumulation across redraws.
+  The same goes for `attachTooltip`.
+- **The two views keep separate filter sets**, deliberately. `session.filters`
+  is module-scope in each of `charts.js` and `timeline.js`, and neither reads
+  the other's.
+- **The time view filters its own bars, unlike the chart view.** `charts.js`
+  draws a card ignoring that card's own selection, so its other values stay on
+  screen. `timeline.js` deliberately does not: every chart's bars show the fully
+  filtered set, because bars that differ between charts would destroy the one
+  property the view is built on (below). The escape hatch is the legend, which
+  *is* counted ignoring its own filter — `matching(series.key)` — so you can
+  still see and pick the alternatives. Don't "fix" this into consistency with
+  `charts.js` without understanding which invariant you are trading away.
+- **The time axis is fixed at `prepare()` time**, from the whole log, and
+  filtering never moves it: `session.first`, `span` and `size` are computed once.
+  A filtered selection is meant to be read against the session it sits in, and a
+  shifting axis would also throw away scroll position on every click.
 - **`AdifCharts.dimensions` is the single dimension list.** The time view reads
   it, so adding a chart there adds a timeline chart too.
 - **Every QSO has exactly one value in every dimension.** That is what lets the
@@ -238,5 +263,11 @@ other software fills in. Each accessor falls back rather than giving up:
 - A pie with dozens of slices is complete but not readable. The `distinct > 12`
   full-width rule helps the layout, not the legibility — bar is the answer.
 - Light theme only; the page does not follow `prefers-color-scheme`.
-- No test suite. `AdifCharts.tally`, `AdifCharts.state()` and `AdifTimeline.bin`
-  are exposed with tests in mind but nothing consumes them yet.
+- No test suite. `AdifCharts.tally`, `AdifCharts.state()` and
+  `AdifTimeline.state()` are exposed with tests in mind but nothing consumes
+  them yet.
+- The chart view and the time view keep **separate** filter sets. Filtering by
+  mode in one and switching to the other starts clean. Sharing one set across
+  both is a plausible next step; it would mean lifting `filters` out of the two
+  module-scope `session` objects — and would need care, since the two views
+  interpret a selection differently (see the bars/legend split above).

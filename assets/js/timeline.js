@@ -9,12 +9,27 @@
 
    Every series shares one time axis and one vertical scale. That is not a
    coincidence worth hiding: each QSO has exactly one value in every
-   dimension, so the bars are the same height in all five charts and only the
+   dimension, so the bars are the same height in all the charts and only the
    segmentation differs. Their horizontal scrolling is synchronised for the
    same reason.
 
    Hours with no contacts are drawn as gaps rather than skipped: a time axis
    that silently closes up its quiet periods misreports the pace of a session.
+
+   The legends cross-filter, as the chart view's do. Clicking a value redraws
+   every chart from the QSOs that match. Two rules differ from the chart view,
+   both of them in service of the shared-bars property above:
+
+     * every chart's BARS show the fully filtered set, its own dimension
+       included, so the charts stay directly comparable to each other;
+     * a LEGEND is counted ignoring its own dimension's filter, so it still
+       lists what you could switch to rather than collapsing to the one value
+       you already picked.
+
+   The time axis stays pinned to the whole log, so a filtered selection is
+   seen against the session it happened in rather than closing up around
+   itself. The vertical scale does rescale, or a rare mode would be a row of
+   invisible slivers.
    --------------------------------------------------------------------------- */
 
 (function (global) {
@@ -34,6 +49,10 @@
 
   var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                 "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  /* Everything about the log on screen. Held at module scope so a filter click
+     can redraw without re-reading the file or re-deriving every record. */
+  var session = null;
 
   function escapeHtml(value) {
     return String(value)
@@ -72,9 +91,10 @@
 
   /* --- binning ------------------------------------------------------------- */
 
-  /* Buckets records into equal time slots, counting every dimension in one
-     pass. Returns contiguous bins, empty ones included, first QSO to last. */
-  function bin(records, dimensions) {
+  /* Derives every record once: when it happened, and its value in each
+     dimension. The time range and bucket size are fixed here, from the whole
+     log, so that filtering later cannot move the axis under the reader. */
+  function prepare(records, dimensions) {
     var stamped = [];
     var undated = 0;
     var i, d;
@@ -90,7 +110,9 @@
       stamped.push({ at: when.getTime(), values: values });
     }
 
-    if (!stamped.length) return { bins: [], undated: undated, size: HOUR };
+    if (!stamped.length) {
+      return { stamped: stamped, undated: undated, size: HOUR, first: 0, span: 0 };
+    }
 
     var min = Infinity, max = -Infinity;
     for (i = 0; i < stamped.length; i++) {
@@ -105,25 +127,69 @@
       span = Math.floor(max / size) - Math.floor(min / size) + 1;
     }
 
-    var first = Math.floor(min / size);
+    return {
+      stamped: stamped,
+      undated: undated,
+      size: size,
+      first: Math.floor(min / size),
+      span: span
+    };
+  }
+
+  /* Buckets the given records into the log's fixed slots, counting every
+     dimension in one pass. Empty slots are kept. */
+  function bin(entries, dimensions) {
     var bins = [];
-    for (i = 0; i < span; i++) {
+    var i, d;
+
+    for (i = 0; i < session.span; i++) {
       var counts = {};
       for (d = 0; d < dimensions.length; d++) counts[dimensions[d].key] = Object.create(null);
-      bins.push({ start: (first + i) * size, total: 0, counts: counts });
+      bins.push({ start: (session.first + i) * session.size, total: 0, counts: counts });
     }
 
-    for (i = 0; i < stamped.length; i++) {
-      var slot = bins[Math.floor(stamped[i].at / size) - first];
+    for (i = 0; i < entries.length; i++) {
+      var slot = bins[Math.floor(entries[i].at / session.size) - session.first];
+      if (!slot) continue;
+
       for (d = 0; d < dimensions.length; d++) {
         var key = dimensions[d].key;
-        var value = stamped[i].values[key];
+        var value = entries[i].values[key];
         slot.counts[key][value] = (slot.counts[key][value] || 0) + 1;
       }
       slot.total++;
     }
 
-    return { bins: bins, undated: undated, size: size };
+    return bins;
+  }
+
+  /* --- filtering ----------------------------------------------------------- */
+
+  /* Records matching every active filter, optionally ignoring one dimension's
+     own filter - which is how a legend keeps listing what you could switch to
+     instead of collapsing to the single value already picked. */
+  function matching(exceptKey) {
+    var keys = Object.keys(session.filters).filter(function (key) {
+      return key !== exceptKey;
+    });
+
+    if (!keys.length) return session.stamped;
+
+    return session.stamped.filter(function (entry) {
+      for (var i = 0; i < keys.length; i++) {
+        if (entry.values[keys[i]] !== session.filters[keys[i]]) return false;
+      }
+      return true;
+    });
+  }
+
+  function tallyValues(entries, key) {
+    var counts = Object.create(null);
+    for (var i = 0; i < entries.length; i++) {
+      var value = entries[i].values[key];
+      counts[value] = (counts[value] || 0) + 1;
+    }
+    return counts;
   }
 
   /* --- rendering ----------------------------------------------------------- */
@@ -144,13 +210,12 @@
   }
 
   /* One chart: the same bars every time, segmented by `series`. */
-  function renderPlot(data, scale, series, layout) {
-    var bins = data.bins;
+  function renderPlot(bins, scale, series, layout) {
     var barWidth = layout.barWidth;
     var gap = layout.gap;
     var width = Math.max(1, bins.length * (barWidth + gap));
     var height = PLOT_HEIGHT + TOP_PAD + LABEL_BAND;
-    var hourly = data.size === HOUR;
+    var hourly = session.size === HOUR;
 
     var html = ['<svg class="timeline__plot" width="' + width + '" height="' + height +
                 '" role="img" aria-label="QSOs per ' + (hourly ? "hour" : "day") +
@@ -221,59 +286,106 @@
     return html.join("");
   }
 
-  function renderLegend(series) {
+  /* The legend doubles as the filter control. Counts ignore this dimension's
+     own filter, so the rows you are not on still say what picking them would
+     give - and the row you are on matches the bars beside it. */
+  function renderLegend(series, counts) {
+    var selected = session.filters[series.key];
+
     var html = ['<ul class="timeline__legend">'];
 
     series.order.forEach(function (name) {
-      html.push('<li class="timeline__legend-item">' +
+      if (!counts[name] && name !== selected) return;
+
+      var state = selected === undefined ? ""
+                : name === selected ? " is-selected" : " is-dimmed";
+
+      html.push('<li class="timeline__legend-item' + state +
+                '" data-dim="' + series.key + '" data-value="' + escapeHtml(name) +
+                '" role="button" tabindex="0" aria-pressed="' + (name === selected) +
+                '" title="Filter by ' + escapeHtml(name) + '">' +
                 '<span class="pie__swatch" style="background:' + series.colors[name] + '"></span>' +
                 escapeHtml(name) +
-                '<span class="timeline__legend-count">' + series.totals[name] + "</span></li>");
+                '<span class="timeline__legend-count">' + (counts[name] || 0) + "</span></li>");
     });
 
     html.push("</ul>");
     return html.join("");
   }
 
-  function renderCard(data, scale, series, layout) {
-    var unit = data.size === HOUR ? "hour" : "day";
-    var html = ['<section class="timeline-card" data-dim="' + series.key + '">'];
+  function renderCard(bins, scale, series, layout) {
+    var unit = session.size === HOUR ? "hour" : "day";
+    var filtered = session.filters[series.key] !== undefined ? " chart-card--filtered" : "";
+
+    // Counted ignoring this dimension's own filter, so the legend keeps
+    // offering the alternatives - and the heading describes that same set
+    // rather than the whole log.
+    var counts = tallyValues(matching(series.key), series.key);
+    var distinct = Object.keys(counts).length;
+
+    var html = ['<section class="timeline-card' + filtered +
+                '" data-dim="' + series.key + '">'];
 
     html.push('<div class="chart-card__head"><div>');
     html.push('<h2 class="chart-card__title">' + escapeHtml(series.title) + "</h2>");
-    html.push('<p class="chart-card__sub">' + series.order.length + " distinct · stacked per " +
+    html.push('<p class="chart-card__sub">' + distinct + " distinct · stacked per " +
               unit + "</p>");
     html.push("</div></div>");
 
-    html.push(renderLegend(series));
+    html.push(renderLegend(series, counts));
 
     html.push('<div class="timeline__chart">');
     html.push(renderAxis(scale));
     html.push('<div class="timeline__scroll">' +
-              renderPlot(data, scale, series, layout) + "</div>");
+              renderPlot(bins, scale, series, layout) + "</div>");
     html.push("</div>");
 
     html.push("</section>");
     return html.join("");
   }
 
+  /* The active selections, each removable, plus a clear-all. Without this a
+     filter set from one card would be hard to find and undo from another. */
+  function renderFilterBar() {
+    if (!Object.keys(session.filters).length) return "";
+
+    var html = ['<div class="filter-bar"><span class="filter-bar__label">Filtered by</span>'];
+
+    session.series.forEach(function (series) {
+      var value = session.filters[series.key];
+      if (value === undefined) return;
+
+      html.push('<button class="filter-chip" type="button" data-clear="' + series.key +
+                '" title="Remove this filter">' +
+                '<span class="filter-chip__dim">' + escapeHtml(series.title) + "</span>" +
+                '<span class="filter-chip__value">' + escapeHtml(value) + "</span>" +
+                '<svg viewBox="0 0 16 16" width="11" height="11" fill="none" ' +
+                'stroke="currentColor" stroke-width="1.8" stroke-linecap="round" ' +
+                'aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>');
+    });
+
+    html.push('<button class="filter-bar__clear" type="button" data-clear-all>Clear all</button>');
+    html.push("</div>");
+    return html.join("");
+  }
+
   /* --- tooltip ------------------------------------------------------------- */
 
-  function attachTooltip(root, data, seriesByKey) {
+  function attachTooltip(root) {
     var tip = document.createElement("div");
     tip.className = "chart-tip chart-tip--stack";
     tip.hidden = true;
     root.appendChild(tip);
 
-    var hourly = data.size === HOUR;
+    var hourly = session.size === HOUR;
 
     function show(event) {
       var target = event.target.closest("[data-bin]");
       if (!target || !root.contains(target)) return;
 
       var card = target.closest("[data-dim]");
-      var series = card && seriesByKey[card.getAttribute("data-dim")];
-      var slot = data.bins[parseInt(target.getAttribute("data-bin"), 10)];
+      var series = card && session.byKey[card.getAttribute("data-dim")];
+      var slot = session.bins[parseInt(target.getAttribute("data-bin"), 10)];
       if (!series || !slot) return;
 
       var date = new Date(slot.start);
@@ -346,8 +458,14 @@
   /* Every chart shares one time axis, so scrolling one scrolls them all -
      otherwise comparing the same hour across series means lining up five
      scrollbars by hand. */
-  function syncScrolling(root) {
+  function syncScrolling(root, left) {
     var scrollers = [].slice.call(root.querySelectorAll(".timeline__scroll"));
+    if (!scrollers.length) return;
+
+    // A redraw rebuilds the scrollers, so put them back where they were.
+    if (left) {
+      scrollers.forEach(function (scroller) { scroller.scrollLeft = left; });
+    }
     if (scrollers.length < 2) return;
 
     var settling = false;
@@ -368,6 +486,129 @@
     });
   }
 
+  /* --- drawing ------------------------------------------------------------- */
+
+  function draw() {
+    var pane = session.pane;
+
+    // Keep the reader's place across a redraw.
+    var scroller = pane.querySelector(".timeline__scroll");
+    var left = scroller ? scroller.scrollLeft : 0;
+
+    var entries = matching(null);
+    session.bins = bin(entries, session.series);
+
+    // Every dimension counts the same QSOs, so one scale serves them all and
+    // the bars stay directly comparable down the page.
+    var peak = session.bins.reduce(function (most, slot) {
+      return Math.max(most, slot.total);
+    }, 0);
+    var scale = yScale(peak);
+
+    var available = Math.max(240, pane.clientWidth - AXIS_WIDTH - 68);
+    var gap = session.span > 400 ? 0 : 1;
+    var layout = {
+      gap: gap,
+      barWidth: Math.max(2, Math.min(64, Math.floor(available / session.span) - gap))
+    };
+
+    var unit = session.size === HOUR ? "hour" : "day";
+    var total = session.stamped.length;
+    var html = ['<div class="timeline">'];
+
+    html.push('<div class="chart-view__meta"><strong>' + escapeHtml(session.fileName) +
+              "</strong><span>" +
+              (entries.length === session.records.length
+                ? session.records.length.toLocaleString() + " record" +
+                  (session.records.length === 1 ? "" : "s")
+                : entries.length.toLocaleString() + " of " +
+                  session.records.length.toLocaleString() + " records") +
+              "</span><span>" +
+              session.span.toLocaleString() + " " + unit +
+              (session.span === 1 ? "" : "s") + "</span><span>peak " +
+              peak.toLocaleString() + " per " + unit + "</span>");
+    if (session.size !== HOUR) {
+      html.push('<span class="timeline__note">bucketed by day — the log spans ' +
+                'too many hours to draw one bar each</span>');
+    }
+    if (session.undated) {
+      html.push('<span class="table-view__warn">' + session.undated +
+                " record" + (session.undated === 1 ? "" : "s") +
+                " without a date, not plotted</span>");
+    }
+    html.push("</div>");
+
+    html.push(renderFilterBar());
+
+    session.series.forEach(function (series) {
+      html.push(renderCard(session.bins, scale, series, layout));
+    });
+
+    html.push("</div>");
+    pane.innerHTML = html.join("");
+
+    var root = pane.querySelector(".timeline");
+    attachInteraction(root);
+    attachTooltip(root);
+    syncScrolling(root, left);
+  }
+
+  /* --- interaction --------------------------------------------------------- */
+
+  /* Selecting a value that is already selected clears it, so a second click on
+     the same legend row is the way back out. */
+  function toggleFilter(key, name) {
+    if (session.filters[key] === name) {
+      delete session.filters[key];
+    } else {
+      session.filters[key] = name;
+    }
+    draw();
+  }
+
+  /* Bound to the view's own root for the same reason charts.js is: the work
+     pane is shared between the two views, and both filter bars emit data-clear
+     and data-clear-all. A listener on the pane would survive the switch to the
+     other view and act on the wrong session. */
+  function attachInteraction(root) {
+    if (!root) return;
+
+    function act(target) {
+      var chip = target.closest("[data-clear], [data-clear-all]");
+      if (chip && root.contains(chip)) {
+        if (chip.hasAttribute("data-clear-all")) {
+          session.filters = Object.create(null);
+        } else {
+          delete session.filters[chip.getAttribute("data-clear")];
+        }
+        draw();
+        return true;
+      }
+
+      var row = target.closest("[data-value]");
+      if (row && root.contains(row)) {
+        toggleFilter(row.getAttribute("data-dim"), row.getAttribute("data-value"));
+        return true;
+      }
+
+      return false;
+    }
+
+    root.addEventListener("click", function (event) {
+      if (session) act(event.target);
+    });
+
+    // Legend rows are exposed as buttons, so they answer the keyboard too.
+    root.addEventListener("keydown", function (event) {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      if (!session) return;
+      if (!event.target.closest('[data-value][role="button"]')) return;
+
+      event.preventDefault();
+      act(event.target);
+    });
+  }
+
   /* --- entry point --------------------------------------------------------- */
 
   function render(pane, log, fileName) {
@@ -381,11 +622,12 @@
     }
 
     // Colours and stacking order per dimension, from the unfiltered ranking -
-    // the same one the chart view paints from.
-    var seriesByKey = Object.create(null);
-    var seriesList = dimensions.map(function (spec) {
+    // the same one the chart view paints from. Fixed once, so filtering never
+    // repaints a value or reshuffles a stack.
+    var byKey = Object.create(null);
+    var series = dimensions.map(function (spec) {
       var tallied = AdifCharts.tally(records, AdifParser[spec.accessor]);
-      var series = {
+      var entry = {
         key: spec.key,
         title: spec.title,
         order: [],
@@ -394,69 +636,49 @@
       };
 
       tallied.slices.forEach(function (slice) {
-        series.order.push(slice.name);
-        series.colors[slice.name] = slice.color;
-        series.totals[slice.name] = slice.count;
+        entry.order.push(slice.name);
+        entry.colors[slice.name] = slice.color;
+        entry.totals[slice.name] = slice.count;
       });
 
-      seriesByKey[spec.key] = series;
-      return series;
+      byKey[spec.key] = entry;
+      return entry;
     });
 
-    var data = bin(records, dimensions);
+    var prepared = prepare(records, dimensions);
 
-    if (!data.bins.length) {
+    if (!prepared.span) {
       pane.innerHTML = '<div class="placeholder"><p class="placeholder__text ' +
         'placeholder__text--error">No record carries a usable QSO_DATE, so there ' +
         'is nothing to place on a time axis.</p></div>';
       return;
     }
 
-    // Every dimension counts the same QSOs, so one scale serves them all and
-    // the bars stay directly comparable down the page.
-    var peak = data.bins.reduce(function (most, slot) {
-      return Math.max(most, slot.total);
-    }, 0);
-    var scale = yScale(peak);
+    // Returning to the time view from elsewhere keeps the filters; loading a
+    // different log starts clean.
+    var sameLog = session && session.records === records;
 
-    var available = Math.max(240, pane.clientWidth - AXIS_WIDTH - 68);
-    var gap = data.bins.length > 400 ? 0 : 1;
-    var layout = {
-      gap: gap,
-      barWidth: Math.max(2, Math.min(64, Math.floor(available / data.bins.length) - gap))
+    session = {
+      pane: pane,
+      records: records,
+      fileName: fileName,
+      series: series,
+      byKey: byKey,
+      stamped: prepared.stamped,
+      undated: prepared.undated,
+      size: prepared.size,
+      first: prepared.first,
+      span: prepared.span,
+      filters: sameLog ? session.filters : Object.create(null),
+      bins: []
     };
 
-    var unit = data.size === HOUR ? "hour" : "day";
-    var html = ['<div class="timeline">'];
-
-    html.push('<div class="chart-view__meta"><strong>' + escapeHtml(fileName) +
-              "</strong><span>" + records.length.toLocaleString() + " record" +
-              (records.length === 1 ? "" : "s") + "</span><span>" +
-              data.bins.length.toLocaleString() + " " + unit +
-              (data.bins.length === 1 ? "" : "s") + "</span><span>peak " +
-              peak.toLocaleString() + " per " + unit + "</span>");
-    if (data.size !== HOUR) {
-      html.push('<span class="timeline__note">bucketed by day — the log spans ' +
-                'too many hours to draw one bar each</span>');
-    }
-    if (data.undated) {
-      html.push('<span class="table-view__warn">' + data.undated +
-                " record" + (data.undated === 1 ? "" : "s") +
-                " without a date, not plotted</span>");
-    }
-    html.push("</div>");
-
-    seriesList.forEach(function (series) {
-      html.push(renderCard(data, scale, series, layout));
-    });
-
-    html.push("</div>");
-    pane.innerHTML = html.join("");
-
-    var root = pane.querySelector(".timeline");
-    attachTooltip(root, data, seriesByKey);
-    syncScrolling(root);
+    draw();
   }
 
-  global.AdifTimeline = { render: render, bin: bin };
+  global.AdifTimeline = {
+    render: render,
+    /* exposed for tests */
+    state: function () { return session; }
+  };
 })(window);
