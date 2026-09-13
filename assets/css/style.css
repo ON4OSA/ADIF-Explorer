@@ -25,7 +25,9 @@
   --file-select-width: 240px;
 
   --toolbar-height: 56px;
-  --shell-gap: 12px;
+  /* Tighter than the padding to the window edge, so the toolbar reads as
+     belonging to the pane below it rather than floating separately. */
+  --shell-gap: 8px;
   --shell-padding: 12px;
   --radius: 10px;
   --shadow: 0 1px 2px rgba(27, 31, 36, 0.06);
